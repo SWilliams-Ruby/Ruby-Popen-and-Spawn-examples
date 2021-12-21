@@ -2,48 +2,16 @@
 require 'fiddle/import'
 require 'fiddle/types'
 
+# Reset a bit in the RTL that enables STDOUT in Child Processes
+# S. Williams
+# December 1, 2021
+
 module SW
   module Util
-  
-    def self.memory_dump_object(object, count = 8)
-      address = object.object_id << 1
-      memory_dump_address(address, count)
-    end
-
-    def self.memory_dump_address(address, count = 8)
-      ptr = Fiddle::Pointer.new(address)
-      memory_dump_ptr(ptr, count)
-    end
-
-    def self.memory_dump_ptr(ptr, count = 8)
-      offset  = 0
-      count.times {
-        print (ptr.to_int + offset).to_s(16) # physical address
-        data = ptr[offset, 16]
-        data.each_byte { |b| print (b < 16 ? ' 0' + b.to_s(16) : ' ' + b.to_s(16)) }
-        print '  '
-        data.each_char { |b|
-          if b.ord > 0x20
-            print ' ' + b.to_s
-          else
-            print ' '
-          end
-        }
-        offset += 16
-        puts
-      }
-      puts
-    end
-    
-    def self.dump_string_as_hex(str)
-      p str.each_byte.map { |b| (b < 16 ? ' 0' + b.to_s(16) : ' ' + b.to_s(16)) }.join
-    end
-
     module Ntdll
       extend Fiddle::Importer
       dlload 'ntdll'
       include Fiddle::Win32Types
-        
 
       # https://docs.microsoft.com/en-us/windows/win32/api/winternl/nf-winternl-ntqueryinformationprocess
       # __kernel_entry NTSTATUS NtQueryInformationProcess(
@@ -53,7 +21,6 @@ module SW
       # [in]            ULONG            ProcessInformationLength,
       # [out, optional] PULONG           ReturnLength
       # );
-
 
       # from Ruby 2.2 Win32.c
       # get_process_parent_pid __kernel_entry NTSTATUS NtQueryInformationProcess
@@ -91,6 +58,8 @@ module SW
 
     end
     
+    # Dump the PROCESS_BASIC_INFORMATION
+    #
     def self.dump_pbi(pbi)
       puts
       puts 'pbi memory_dump'
@@ -129,8 +98,8 @@ module SW
     # https://en.wikipedia.org/wiki/Process_Environment_Block
     def self.get_PEB_pointer()
       pbi = get_PBI()
-      puts "PEB"
-      memory_dump_ptr(pbi.pebBaseAddress)
+      # puts "PEB"
+      # memory_dump_ptr(pbi.pebBaseAddress)
       pbi.pebBaseAddress
     end
     
@@ -142,8 +111,8 @@ module SW
       rtl_adr = pebBaseAddress[0x20, 8]
       address = rtl_adr.unpack('Q')[0]
       rtl_ptr = Fiddle::Pointer.new(address)
-      puts "RTL"
-      memory_dump_ptr(rtl_ptr, 16)
+      # puts "RTL"
+      # memory_dump_ptr(rtl_ptr, 16)
       rtl_ptr
     end
         
@@ -170,7 +139,7 @@ module SW
         # ULONG               dwXCountChars;
         # ULONG               dwYCountChars;
         # ULONG               dwFillAttribute;
-        # ULONG               dwFlags; / 0xA4 /
+        # ULONG               dwFlags; / 0xA4 / #################################
         # ULONG               wShowWindow;
         # UNICODE_STRING      WindowTitle;
         # UNICODE_STRING      Desktop;
@@ -196,6 +165,52 @@ module SW
         rtl_ptr[0xa5] = new_value
       end
       
+    end
+    
+    ################################
+    # generic dump memory routines
+    ################################ 
+    
+    # Dump ruby object. Count is the number of 16 byte lines
+    #
+    def self.memory_dump_object(object, count = 8)
+      address = object.object_id << 1
+      memory_dump_address(address, count)
+    end
+
+    # Dump a memory address
+    #
+    def self.memory_dump_address(address, count = 8)
+      ptr = Fiddle::Pointer.new(address)
+      memory_dump_ptr(ptr, count)
+    end
+
+    # Dump memory at [Fiddle::Pointer] ptr
+    #
+    def self.memory_dump_ptr(ptr, count = 8)
+      offset  = 0
+      count.times {
+        print (ptr.to_int + offset).to_s(16) # physical address
+        data = ptr[offset, 16]
+        data.each_byte { |b| print (b < 16 ? ' 0' + b.to_s(16) : ' ' + b.to_s(16)) }
+        print '  '
+        data.each_char { |b|
+          if b.ord > 0x20
+            print ' ' + b.to_s
+          else
+            print ' '
+          end
+        }
+        offset += 16
+        puts
+      }
+      puts
+    end
+
+    # Dump a string a hexadecimal bytes
+    #
+    def self.dump_string_as_hex(str)
+      p str.each_byte.map { |b| (b < 16 ? ' 0' + b.to_s(16) : ' ' + b.to_s(16)) }.join
     end
     
   end

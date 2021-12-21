@@ -15,15 +15,15 @@ module SW
     end
 
     def self.run_python_example()
-      path = 'C:\Users\User\Documents\sketchup code\sw_async_runner\src\python_async_client.py'
+      path = 'C:\Users\User\Documents\sketchup code\sw_async_runner\src\hello.py'
       prog = 'pythonw'
       args = path
       os_client = SW::AsyncRunner::AsyncOSRunner.new(prog, args)
-      os_client.run(:live) { |result| puts result}
+      os_client.run() { |result| puts result}
     end
     
     def self.run_ruby_example()
-      client = 'C:/Users/User/Documents/sketchup code/SW_async_runner/src/ruby_async_client.rb'
+      client = 'C:/Users/User/Documents/sketchup code/sw_popen/src/SW_async_client.rb'
       args = 'Other Args'
       #args = 'force_error' #uncomment this line to test error handling
       ruby_client = SW::AsyncRunner::AsyncRubyRunner.new(client, args)
