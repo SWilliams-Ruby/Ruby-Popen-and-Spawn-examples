@@ -19,7 +19,11 @@ module SW
       prog = 'pythonw'
       args = path
       os_client = SW::AsyncRunner::AsyncOSRunner.new(prog, args)
-      os_client.run(:live) { |result| puts result}
+      os_client.run(:live) { |async_ruby_runner|
+        puts async_ruby_runner.data.pop(true) rescue :NoData
+        puts async_ruby_runner.status
+        puts async_ruby_runner.error_message if async_ruby_runner.status != :Running
+      }
     end
     
     def self.run_ruby_example()
