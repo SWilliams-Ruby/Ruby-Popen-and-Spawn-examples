@@ -1,52 +1,23 @@
+# RubyAsyncRunner
+# OSAsyncRunner
+# new (prog, args)
+# run(:live) { |async_runner| ... }
+
+# methods
+# set_timeout
+# close
+
+# attr_readers
+# :data, 
+# :status, 
+# :live_connection, 
+# :error_message
+
+
+
+
 module SW
   module AsyncRunner
-
-    def self.run_async_demo()
-      run_ruby_example()
-      #run_dir_example()
-      run_python_example()
-    end
-    
-    def self.run_dir_example()
-      prog = 'dir'
-      args = ''
-      async_os_runner = SW::AsyncRunner::AsyncOSRunner.new(prog, args)
-      async_os_runner.run() { |async_os_runner|
-        puts async_os_runner.data.pop(true) rescue :NoData
-        puts async_os_runner.status
-        puts async_os_runner.error_message if async_os_runner.status != :Running
-      }
-    end
-
-    def self.run_python_example()
-      path = 'C:\Users\User\Documents\sketchup code\sw_async_runner\src\python_async_client.py'
-      prog = 'pythonw'
-      args = path
-      async_os_runner = SW::AsyncRunner::AsyncOSRunner.new(prog, args)
-      async_os_runner.run(:live) { |async_os_runner|
-        puts async_os_runner.data.pop(true) rescue :NoData
-        puts async_os_runner.status
-        puts async_os_runner.error_message if async_os_runner.status != :Running
-      }
-    end
-    
-    def self.run_ruby_example()
-      client = 'C:/Users/User/Documents/sketchup code/SW_async_runner/src/ruby_async_client.rb'
-      args = 'Other Args'
-      #args = 'force_error' #uncomment this line to test error handling
-      async_ruby_runner = SW::AsyncRunner::AsyncRubyRunner.new(client, args)
-      #async_ruby_runner.set_timeout(1)
-
-      async_ruby_runner.run(:live) { |async_ruby_runner|
-        puts async_ruby_runner.data.pop(true) rescue :NoData
-        puts async_ruby_runner.status
-        puts async_ruby_runner.error_message if async_ruby_runner.status != :Running
-      }
-  
-      async_ruby_runner.stdin_puts 'hello from STDIN'
-      # async_ruby_runner.close() # test closing the process
-    end
-
     module AsyncRunnerCore
       attr_reader(:status, :data, :live_connection, :error_message )
       @update_caller = false  
@@ -149,7 +120,7 @@ module SW
       end
     end #module
 
-    class AsyncRubyRunner
+    class RubyAsyncRunner
       include AsyncRunnerCore
       def initialize(client, args)
         super
@@ -160,7 +131,7 @@ module SW
       
     end
     
-    class AsyncOSRunner
+    class OSAsyncRunner
       include AsyncRunnerCore
       def initialize(prog, args)
         super
@@ -172,7 +143,4 @@ module SW
     
   end
 end    
- 
-
-SW::AsyncRunner.run_async_demo()
 nil
