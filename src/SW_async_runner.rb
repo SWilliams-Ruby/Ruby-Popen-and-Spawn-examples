@@ -10,19 +10,23 @@ module SW
     def self.run_dir_example()
       prog = 'dir'
       args = ''
-      os_client = SW::AsyncRunner::AsyncOSRunner.new(prog, args)
-      os_client.run() { |result| puts result}
+      async_os_runner = SW::AsyncRunner::AsyncOSRunner.new(prog, args)
+      async_os_runner.run() { |async_os_runner|
+        puts async_os_runner.data.pop(true) rescue :NoData
+        puts async_os_runner.status
+        puts async_os_runner.error_message if async_os_runner.status != :Running
+      }
     end
 
     def self.run_python_example()
       path = 'C:\Users\User\Documents\sketchup code\sw_async_runner\src\python_async_client.py'
       prog = 'pythonw'
       args = path
-      os_client = SW::AsyncRunner::AsyncOSRunner.new(prog, args)
-      os_client.run(:live) { |async_ruby_runner|
-        puts async_ruby_runner.data.pop(true) rescue :NoData
-        puts async_ruby_runner.status
-        puts async_ruby_runner.error_message if async_ruby_runner.status != :Running
+      async_os_runner = SW::AsyncRunner::AsyncOSRunner.new(prog, args)
+      async_os_runner.run(:live) { |async_os_runner|
+        puts async_os_runner.data.pop(true) rescue :NoData
+        puts async_os_runner.status
+        puts async_os_runner.error_message if async_os_runner.status != :Running
       }
     end
     
@@ -65,6 +69,8 @@ module SW
       def close()
         Process.kill("KILL", @wait_thr.pid)
         close_pipes()
+        @status = :Closed
+        @error_message = 'Client Closed'
       end
       
       def stdin_puts(str)
@@ -96,40 +102,48 @@ module SW
         
       def read_client_stdout()
         begin
+          # This loop will throw IO::EWOULDBLOCKWaitReadable when the
+          # pipe is empty on the second or later iteration
           loop do 
+            break unless @status == :Running # The timer can wake us up after we are closed?
             @data << @stdout_r.read_nonblock(10000)
             @update_caller = true  if @live_connection
           end
+          
         rescue IO::EWOULDBLOCKWaitReadable
+          # Requeue unless we have timed out
           unless @timeout_time && (Time.now > @timeout_time) && @status == :Running
             UI.start_timer(0.5) { read_client_stdout() }
           end
+          
         rescue 
-          # When the spawned process closes we will receive an EOFError
-          # Success or failure of the spawned process is determined by the presence/absence of data in the stderr pipe  
+          # When the spawned process closes we will receive an EOFError. Success or
+          # failure of the spawned process is determined by the presence/absence of
+          # data in the stderr pipe  
           begin
             @error_message = @stderr_r.read_nonblock(10000)
             @status = :Process_Failed
             @update_caller = true
             #puts error_message
           rescue 
+            # The spawned process completed successfully
             @status = :Process_Completed_Normally
             @update_caller = true
           end
         end
         
+        # Close the spawned process if we have timed out.
         if @timeout_time && (Time.now > @timeout_time) && @status == :Running
-            @status = :Closed
-            @error_message = 'Client Timed Out'
-            @update_caller = true
-            close()
+          close()
+          @error_message = 'Client Timed Out'
+          @update_caller = true
         end
-          
       
+        # Update the caller
         @callback_block.call(self) if @update_caller
         @update_caller = false
         
-        # close pipes unless we are running or already closed
+        # If we ae shutting down, close the pipes unless we are running or already closed
         close_pipes() unless @status == :Running || @status == :Closed
    
       end
