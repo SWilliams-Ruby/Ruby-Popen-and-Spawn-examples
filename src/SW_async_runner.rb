@@ -4,7 +4,7 @@ module SW
     def self.run_async_demo()
       run_ruby_example()
       #run_dir_example()
-      #run_python_example()
+      run_python_example()
     end
     
     def self.run_dir_example()
