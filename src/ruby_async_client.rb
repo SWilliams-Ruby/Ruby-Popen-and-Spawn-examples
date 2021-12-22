@@ -2,11 +2,12 @@ module SW
   def self.run()
     puts "Ruby Argv: #{ARGV}"
     STDOUT.flush
+    
     5.times { |i|
       check_stdin()
       puts "Ruby Step: #{i}"
       STDOUT.flush
-      sleep(0.5)
+      sleep(0.3)
     }
     
     # force an error
@@ -16,7 +17,7 @@ module SW
   
   def self.check_stdin()
     begin
-      data = STDIN.read_nonblock(10000)
+      data = STDIN.read_nonblock(10000) 
       puts "Ruby Echo STDIN: #{data}"
       STDOUT.flush
     rescue IO::EWOULDBLOCKWaitReadable

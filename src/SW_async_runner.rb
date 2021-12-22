@@ -4,7 +4,7 @@ module SW
     def self.run_async_demo()
       run_ruby_example()
       #run_dir_example()
-      run_python_example()
+      #run_python_example()
     end
     
     def self.run_dir_example()
@@ -26,15 +26,30 @@ module SW
       client = 'C:/Users/User/Documents/sketchup code/SW_async_runner/src/ruby_async_client.rb'
       args = 'Other Args'
       #args = 'force_error' #uncomment this line to test error handling
-      ruby_client = SW::AsyncRunner::AsyncRubyRunner.new(client, args)
-      ruby_client.run(:live) { |result| puts result}
-      ruby_client.stdin_puts 'hello from STDIN'
-      # ruby_client.close() # test closing the process
-      # ruby_client.set_timeout(2)
-  end
+      async_ruby_runner = SW::AsyncRunner::AsyncRubyRunner.new(client, args)
+      #async_ruby_runner.set_timeout(1)
+
+      async_ruby_runner.run(:live) { |async_ruby_runner|
+        puts async_ruby_runner.data.pop(true) rescue :NoData
+        puts async_ruby_runner.status
+        puts async_ruby_runner.error_message if async_ruby_runner.status != :Running
+      }
+  
+      async_ruby_runner.stdin_puts 'hello from STDIN'
+      # async_ruby_runner.close() # test closing the process
+    end
 
     module AsyncRunnerCore
-      class AsyncRunnerAbort < RuntimeError; end
+      attr_reader(:status, :data, :live_connection, :error_message )
+      @update_caller = false  
+      
+      def initialize(client, args)
+        @status = :Idle
+        @data = Queue.new
+        @live_connection = false
+        @error_message  = nil
+        @timeout_time = nil        
+      end
       
       # if live_connection == :live the block is called each time there is data whenever there is data
       def run(live_connection = false, &block)
@@ -45,6 +60,7 @@ module SW
       
       def close()
         Process.kill("KILL", @wait_thr.pid)
+        close_pipes()
       end
       
       def stdin_puts(str)
@@ -53,6 +69,12 @@ module SW
       
       def set_timeout(secs)
         @timeout_time = Time.now + secs
+      end
+      
+      def close_pipes()
+        @stdout_r.close
+        @stdin_w.close
+        @stderr_r.close
       end
     
       def spawn()
@@ -64,55 +86,55 @@ module SW
         stdin_r.close
         stdout_w.close
         stderr_w.close
-        @timeout_time = nil
-        @data = ''
-        @client_status = :running
+        @status = :Running
         read_client_stdout() 
       end
         
-      def read_client_stdout
+      def read_client_stdout()
         begin
-          if @timeout_time && (Time.now > @timeout_time)
-            close()
-            raise AsyncRunnerAbort, "Client Timed Out"
-          end
           loop do 
-            if @live_connection
-              data = @stdout_r.read_nonblock(10000)
-              @callback_block.call(data) if @live_connection
-            else
-              @data << @stdout_r.read_nonblock(10000)
-            end
-            
+            @data << @stdout_r.read_nonblock(10000)
+            @update_caller = true  if @live_connection
           end
         rescue IO::EWOULDBLOCKWaitReadable
-          UI.start_timer(0.5) { read_client_stdout() }
-        rescue AsyncRunnerAbort
-          @client_status = :Process_Timed_Out
+          unless @timeout_time && (Time.now > @timeout_time) && @status == :Running
+            UI.start_timer(0.5) { read_client_stdout() }
+          end
         rescue 
-          # When the spawned process closes we will receiceand EOFError
+          # When the spawned process closes we will receive an EOFError
           # Success or failure of the spawned process is determined by the presence/absence of data in the stderr pipe  
           begin
-            error = @stderr_r.read_nonblock(10000)
-            puts error
-            @client_status = :Process_Failed
+            @error_message = @stderr_r.read_nonblock(10000)
+            @status = :Process_Failed
+            @update_caller = true
+            #puts error_message
           rescue 
-            @client_status = :Process_Completed_Normally
+            @status = :Process_Completed_Normally
+            @update_caller = true
           end
         end
         
-        if @client_status != :running
-          @stdout_r.close
-          @stderr_r.close
-          @callback_block.call(@data) unless @live_connection
-          puts "Async_Runner Client status: #{@client_status}"
+        if @timeout_time && (Time.now > @timeout_time) && @status == :Running
+            @status = :Closed
+            @error_message = 'Client Timed Out'
+            @update_caller = true
+            close()
         end
+          
+      
+        @callback_block.call(self) if @update_caller
+        @update_caller = false
+        
+        # close pipes unless we are running or already closed
+        close_pipes() unless @status == :Running || @status == :Closed
+   
       end
     end #module
 
     class AsyncRubyRunner
       include AsyncRunnerCore
       def initialize(client, args)
+        super
         prog = 'rubyw'
         @env = {'GEM_HOME' => nil,'GEM_PATH'=> nil}
         @cmd  = [prog, client, args]
@@ -123,6 +145,7 @@ module SW
     class AsyncOSRunner
       include AsyncRunnerCore
       def initialize(prog, args)
+        super
         @env = {}
         @cmd  = [prog, args]
       end
